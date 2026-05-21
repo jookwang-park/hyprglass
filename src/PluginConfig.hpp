@@ -31,6 +31,13 @@ inline constexpr auto ENABLED        = "plugin:hyprglass:enabled";
 inline constexpr auto DEFAULT_THEME  = "plugin:hyprglass:default_theme";
 inline constexpr auto DEFAULT_PRESET = "plugin:hyprglass:default_preset";
 
+// Optional animated rain overlay
+inline constexpr auto RAIN_ENABLED    = "plugin:hyprglass:rain:enabled";
+inline constexpr auto RAIN_INTENSITY  = "plugin:hyprglass:rain:intensity";
+inline constexpr auto RAIN_SPEED      = "plugin:hyprglass:rain:speed";
+inline constexpr auto RAIN_SCALE      = "plugin:hyprglass:rain:scale";
+inline constexpr auto RAIN_DISTORTION = "plugin:hyprglass:rain:distortion";
+
 // Preset keyword, registered as unscoped because Hyprlang does not dispatch
 // scoped keyword handlers inside the plugin special category.
 inline constexpr auto PRESET_KEYWORD = "preset";
@@ -178,6 +185,12 @@ struct SPluginConfig {
     Hyprlang::INT* const* enabled       = nullptr;
     StringConfigPtr      defaultTheme;
     StringConfigPtr      defaultPreset;
+
+    Hyprlang::INT* const*   rainEnabled    = nullptr;
+    Hyprlang::FLOAT* const* rainIntensity  = nullptr;
+    Hyprlang::FLOAT* const* rainSpeed      = nullptr;
+    Hyprlang::FLOAT* const* rainScale      = nullptr;
+    Hyprlang::FLOAT* const* rainDistortion = nullptr;
 
     Hyprlang::INT* const* layersEnabled                  = nullptr;
     StringConfigPtr       layersNamespaces;

@@ -44,6 +44,12 @@ bool CShaderManager::compileGlassShader() {
     glassUniforms.vibrancyDarkness    = glGetUniformLocation(program, "vibrancyDarkness");
     glassUniforms.adaptiveDim         = glGetUniformLocation(program, "adaptiveDim");
     glassUniforms.adaptiveBoost       = glGetUniformLocation(program, "adaptiveBoost");
+    glassUniforms.timeSeconds         = glGetUniformLocation(program, "timeSeconds");
+    glassUniforms.rainEnabled         = glGetUniformLocation(program, "rainEnabled");
+    glassUniforms.rainIntensity       = glGetUniformLocation(program, "rainIntensity");
+    glassUniforms.rainSpeed           = glGetUniformLocation(program, "rainSpeed");
+    glassUniforms.rainScale           = glGetUniformLocation(program, "rainScale");
+    glassUniforms.rainDistortion      = glGetUniformLocation(program, "rainDistortion");
     glassUniforms.maskTex             = glGetUniformLocation(program, "maskTex");
     glassUniforms.useMask             = glGetUniformLocation(program, "useMask");
     glassUniforms.maskUVOffset        = glGetUniformLocation(program, "maskUVOffset");
@@ -74,14 +80,18 @@ bool CShaderManager::compileBlurShader() {
 }
 
 void CShaderManager::initializeIfNeeded() {
-    if (m_initialized)
+    if (m_initialized || m_failed)
         return;
 
-    if (!compileGlassShader())
+    if (!compileGlassShader()) {
+        m_failed = true;
         return;
+    }
 
-    if (!compileBlurShader())
+    if (!compileBlurShader()) {
+        m_failed = true;
         return;
+    }
 
     m_initialized = true;
 }
@@ -90,4 +100,5 @@ void CShaderManager::destroy() noexcept {
     glassShader->destroy();
     blurShader->destroy();
     m_initialized = false;
+    m_failed = false;
 }

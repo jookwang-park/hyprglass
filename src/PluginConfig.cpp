@@ -37,6 +37,13 @@ void registerConfig(HANDLE handle) {
     addConfigValue<Config::Values::String>(handle, ConfigKeys::DEFAULT_THEME, Config::STRING{"dark"});
     addConfigValue<Config::Values::String>(handle, ConfigKeys::DEFAULT_PRESET, Config::STRING{"default"});
 
+    // Animated rain overlay (off by default)
+    addConfigValue<Config::Values::Int>(handle, ConfigKeys::RAIN_ENABLED, Config::INTEGER{0});
+    addConfigValue<Config::Values::Float>(handle, ConfigKeys::RAIN_INTENSITY, Config::FLOAT{0.35f});
+    addConfigValue<Config::Values::Float>(handle, ConfigKeys::RAIN_SPEED, Config::FLOAT{0.45f});
+    addConfigValue<Config::Values::Float>(handle, ConfigKeys::RAIN_SCALE, Config::FLOAT{1.0f});
+    addConfigValue<Config::Values::Float>(handle, ConfigKeys::RAIN_DISTORTION, Config::FLOAT{0.035f});
+
     // Layer surface support
     addConfigValue<Config::Values::Int>(handle, ConfigKeys::LAYERS_ENABLED, Config::INTEGER{0});
     addConfigValue<Config::Values::String>(handle, ConfigKeys::LAYERS_NAMESPACES, Config::STRING{});
@@ -155,6 +162,12 @@ void initConfigPointers(HANDLE handle, SPluginConfig& config) {
     config.enabled       = getStaticPtr<Hyprlang::INT>(handle, ConfigKeys::ENABLED);
     config.defaultTheme  = getStringPtr(handle, ConfigKeys::DEFAULT_THEME);
     config.defaultPreset = getStringPtr(handle, ConfigKeys::DEFAULT_PRESET);
+
+    config.rainEnabled    = getStaticPtr<Hyprlang::INT>(handle, ConfigKeys::RAIN_ENABLED);
+    config.rainIntensity  = getStaticPtr<Hyprlang::FLOAT>(handle, ConfigKeys::RAIN_INTENSITY);
+    config.rainSpeed      = getStaticPtr<Hyprlang::FLOAT>(handle, ConfigKeys::RAIN_SPEED);
+    config.rainScale      = getStaticPtr<Hyprlang::FLOAT>(handle, ConfigKeys::RAIN_SCALE);
+    config.rainDistortion = getStaticPtr<Hyprlang::FLOAT>(handle, ConfigKeys::RAIN_DISTORTION);
 
     config.layersEnabled           = getStaticPtr<Hyprlang::INT>(handle, ConfigKeys::LAYERS_ENABLED);
     config.layersNamespaces        = getStringPtr(handle, ConfigKeys::LAYERS_NAMESPACES);

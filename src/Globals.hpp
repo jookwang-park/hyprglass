@@ -4,6 +4,7 @@
 #include "PluginConfig.hpp"
 #include "ShaderManager.hpp"
 
+#include <hyprland/src/managers/eventLoop/EventLoopTimer.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/Framebuffer.hpp>
 #include <hyprland/src/render/OpenGL.hpp>
@@ -51,6 +52,9 @@ struct SGlobalState {
         return it != sceneGeneration.end() ? it->second : 0;
     }
     void bumpSceneGeneration(CMonitor* mon) { sceneGeneration[mon]++; }
+
+    // Timer-driven damage for animated rain.
+    SP<CEventLoopTimer> rainTimer;
 
     // renderLayer hook
     CFunctionHook* renderLayerHook = nullptr;

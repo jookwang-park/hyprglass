@@ -9,6 +9,7 @@
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/desktop/view/LayerSurface.hpp>
 #include <hyprland/src/helpers/time/Time.hpp>
+#include <hyprland/src/managers/eventLoop/EventLoopManager.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/helpers/Color.hpp>
@@ -16,7 +17,11 @@
 #include <hyprland/src/debug/log/Logger.hpp>
 #include <hyprland/src/event/EventBus.hpp>
 
+#include <chrono>
+#include <optional>
 #include <sstream>
+
+static void updateRainTimer();
 
 static void onNewWindow(PHLWINDOW window) {
     if (std::ranges::any_of(window->m_windowDecorations,
@@ -27,6 +32,7 @@ static void onNewWindow(PHLWINDOW window) {
     g_pGlobalState->decorations.emplace_back(decoration);
     decoration->m_self = decoration;
     HyprlandAPI::addWindowDecoration(PHANDLE, window, std::move(decoration));
+    updateRainTimer();
 }
 
 static void onCloseWindow(PHLWINDOW window) {
@@ -34,6 +40,7 @@ static void onCloseWindow(PHLWINDOW window) {
         auto* deco = decoration.get();
         return !deco || deco->getOwner() == window;
     });
+    updateRainTimer();
 }
 
 // ── Layer surface support ────────────────────────────────────────────────────
@@ -112,6 +119,81 @@ static bool shouldGlassLayer(PHLLS layerSurface) {
     return include.contains(ns);
 }
 
+static bool rainEnabled() {
+    const auto& config = g_pGlobalState->config;
+    return config.rainEnabled && **config.rainEnabled;
+}
+
+static bool hasRainGlass() {
+    if (!g_pGlobalState)
+        return false;
+
+    std::erase_if(g_pGlobalState->decorations, [](const auto& decoration) {
+        return !decoration.get();
+    });
+
+    if (!g_pGlobalState->decorations.empty())
+        return true;
+
+    std::erase_if(g_pGlobalState->layerSurfaces, [](const auto& pair) {
+        return !pair.second->getLayerSurface();
+    });
+
+    const auto& config = g_pGlobalState->config;
+    return config.layersEnabled && **config.layersEnabled && !g_pGlobalState->layerSurfaces.empty();
+}
+
+static void damageRainGlass() {
+    if (!g_pGlobalState || !g_pHyprRenderer)
+        return;
+
+    for (const auto& decoration : g_pGlobalState->decorations) {
+        if (auto* deco = decoration.get())
+            deco->damageEntire();
+    }
+
+    const auto& config = g_pGlobalState->config;
+    if (!config.layersEnabled || !**config.layersEnabled)
+        return;
+
+    for (const auto& [_, layer] : g_pGlobalState->layerSurfaces) {
+        if (layer)
+            layer->damageEntire();
+    }
+}
+
+static void updateRainTimer() {
+    if (!g_pGlobalState || !g_pEventLoopManager)
+        return;
+
+    const bool shouldRun = rainEnabled() && hasRainGlass();
+    if (!shouldRun) {
+        if (g_pGlobalState->rainTimer)
+            g_pGlobalState->rainTimer->updateTimeout(std::nullopt);
+        return;
+    }
+
+    const auto interval = std::chrono::milliseconds(33);
+    if (!g_pGlobalState->rainTimer) {
+        g_pGlobalState->rainTimer = makeShared<CEventLoopTimer>(interval, [](SP<CEventLoopTimer> self, void*) {
+            if (!g_pGlobalState)
+                return;
+
+            if (!rainEnabled() || !hasRainGlass()) {
+                self->updateTimeout(std::nullopt);
+                return;
+            }
+
+            damageRainGlass();
+            self->updateTimeout(std::chrono::milliseconds(33));
+        }, nullptr);
+        g_pEventLoopManager->addTimer(g_pGlobalState->rainTimer);
+        return;
+    }
+
+    g_pGlobalState->rainTimer->updateTimeout(interval);
+}
+
 using renderLayerFn = void (*)(Render::IHyprRenderer*, PHLLS, PHLMONITOR, const Time::steady_tp&, bool, bool);
 
 static void hkRenderLayer(Render::IHyprRenderer* thisptr, PHLLS layerSurface, PHLMONITOR monitor,
@@ -155,6 +237,7 @@ static void hkRenderLayer(Render::IHyprRenderer* thisptr, PHLLS layerSurface, PH
         g_pHyprRenderer->m_renderPass.add(makeUnique<CGlassLayerCompositeElement>(postData));
 
         it->second->damageIfMoved();
+        updateRainTimer();
         return;
     }
 
@@ -214,6 +297,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         parseLayerNamespaceFilters();
         commitPendingLayers(); // merge Lua layer() calls on top of string config
         validateConfig();
+        updateRainTimer();
     });
 
 
@@ -260,6 +344,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     parseLayerNamespaceFilters();
     commitPendingLayers();
     validateConfig();
+    updateRainTimer();
 
     return {std::string(PLUGIN_NAME), std::string(PLUGIN_DESCRIPTION), std::string(PLUGIN_AUTHOR), std::string(PLUGIN_VERSION)};
 }
@@ -281,6 +366,12 @@ APICALL EXPORT void PLUGIN_EXIT() {
     if (g_pGlobalState->renderLayerHook) {
         HyprlandAPI::removeFunctionHook(PHANDLE, g_pGlobalState->renderLayerHook);
         g_pGlobalState->renderLayerHook = nullptr;
+    }
+
+    if (g_pGlobalState->rainTimer) {
+        if (g_pEventLoopManager)
+            g_pEventLoopManager->removeTimer(g_pGlobalState->rainTimer);
+        g_pGlobalState->rainTimer.reset();
     }
 
     g_pGlobalState->layerSurfaces.clear();

@@ -59,6 +59,7 @@ if hl.plugin.hyprglass then
         dark = { brightness = 0.82 },
         light = { adaptive_boost = 0.5 },
 
+        rain = { enabled = false, intensity = 0.35, speed = 0.45, scale = 1.0, distortion = 0.035 },
         layers = { enabled = 1 },
     })
 
@@ -99,6 +100,14 @@ plugin:hyprglass {
     dark:brightness = 0.82
     light:adaptive_boost = 0.5
 
+    rain {
+        enabled = 0
+        intensity = 0.35
+        speed = 0.45
+        scale = 1.0
+        distortion = 0.035
+    }
+
     preset = name:clear, glass_opacity:0.8, blur_strength:1.5
     preset = name:clear:dark, brightness:0.7
     preset = name:clear:light, brightness:1.2
@@ -124,6 +133,13 @@ plugin:hyprglass {
 | `enabled` | bool | `true` (`1` in .conf) | Enable/disable the effect globally. Per-window tags override this. |
 | `default_theme` | string | `dark` | Default theme: `dark` or `light` |
 | `default_preset` | string | `default` | Default preset name |
+| `rain:enabled` | bool | `false` (`0` in .conf) | Enable the experimental animated rain overlay. |
+| `rain:intensity` | float | `0.35` | Droplet density and highlight strength. |
+| `rain:speed` | float | `0.45` | Droplet fall speed. |
+| `rain:scale` | float | `1.0` | Droplet pattern scale. |
+| `rain:distortion` | float | `0.035` | Background refraction caused by droplets. |
+
+Rain is disabled by default and uses timer-driven damage only while visible glass exists.
 
 ### Overridable settings
 

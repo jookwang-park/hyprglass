@@ -112,6 +112,26 @@ void CGlassLayerSurface::damageIfMoved() {
     }
 }
 
+void CGlassLayerSurface::damageEntire() {
+    const auto layerSurface = m_layerSurface.lock();
+    if (!layerSurface)
+        return;
+
+    const auto currentPosition = layerSurface->m_realPosition->value();
+    const auto currentSize     = layerSurface->m_realSize->value();
+    if (currentSize.x <= 0.0 || currentSize.y <= 0.0 ||
+        !std::isfinite(currentPosition.x) || !std::isfinite(currentPosition.y) ||
+        !std::isfinite(currentSize.x) || !std::isfinite(currentSize.y))
+        return;
+
+    auto box = CBox{currentPosition, currentSize};
+    const auto monitor = layerSurface->m_monitor.lock();
+    const float scale = monitor ? monitor->m_scale : 1.0f;
+    box.expand(GlassRenderer::SAMPLE_PADDING_PX / scale).noNegativeSize();
+    if (box.w > 0.0 && box.h > 0.0)
+        g_pHyprRenderer->damageBox(box);
+}
+
 void CGlassLayerSurface::sampleAndRedirect(PHLMONITOR monitor, float alpha) {
     auto& shaderManager = g_pGlobalState->shaderManager;
     shaderManager.initializeIfNeeded();

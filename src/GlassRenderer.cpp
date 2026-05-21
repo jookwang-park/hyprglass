@@ -3,6 +3,7 @@
 #include "Globals.hpp"
 
 #include <array>
+#include <chrono>
 #include <GLES3/gl32.h>
 #include <hyprland/src/render/OpenGL.hpp>
 #include <hyprland/src/render/Renderer.hpp>
@@ -194,6 +195,16 @@ void applyGlassEffect(SP<Render::IFramebuffer> sampleFramebuffer, SP<Render::IFr
     glUniform1f(uniforms.glassOpacity,        resolvePresetFloat(resolveContext, &SPresetValues::glassOpacity, &SOverridableConfig::glassOpacity) * alpha);
     glUniform1f(uniforms.edgeThickness,       resolvePresetFloat(resolveContext, &SPresetValues::edgeThickness, &SOverridableConfig::edgeThickness));
     glUniform1f(uniforms.lensDistortion,      resolvePresetFloat(resolveContext, &SPresetValues::lensDistortion, &SOverridableConfig::lensDistortion));
+
+    const auto& config = g_pGlobalState->config;
+    const bool rainEnabled = config.rainEnabled && **config.rainEnabled;
+    const float timeSeconds = std::chrono::duration<float>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    glUniform1f(uniforms.timeSeconds, timeSeconds);
+    glUniform1i(uniforms.rainEnabled, rainEnabled ? 1 : 0);
+    glUniform1f(uniforms.rainIntensity,  config.rainIntensity ? static_cast<float>(**config.rainIntensity) : 0.0f);
+    glUniform1f(uniforms.rainSpeed,      config.rainSpeed ? static_cast<float>(**config.rainSpeed) : 0.0f);
+    glUniform1f(uniforms.rainScale,      config.rainScale ? static_cast<float>(**config.rainScale) : 1.0f);
+    glUniform1f(uniforms.rainDistortion, config.rainDistortion ? static_cast<float>(**config.rainDistortion) : 0.0f);
 
     uploadThemeUniforms(resolveContext);
 

@@ -19,6 +19,12 @@ struct SGlassUniforms {
     GLint vibrancyDarkness = -1;
     GLint adaptiveDim = -1;
     GLint adaptiveBoost = -1;
+    GLint timeSeconds = -1;
+    GLint rainEnabled = -1;
+    GLint rainIntensity = -1;
+    GLint rainSpeed = -1;
+    GLint rainScale = -1;
+    GLint rainDistortion = -1;
     
     // Layers only: temp FBO surface mask for content-aware glass
     GLint maskTex = -1;
@@ -48,6 +54,7 @@ class CShaderManager {
 
   private:
     bool m_initialized = false;
+    bool m_failed      = false;
 
     [[nodiscard]] static std::string loadShaderSource(const char* fileName);
     [[nodiscard]] bool compileGlassShader();

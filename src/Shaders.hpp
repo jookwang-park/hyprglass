@@ -51,6 +51,12 @@ uniform float vibrancyDarkness;
 uniform float adaptiveDim;
 uniform float adaptiveBoost;
 uniform float roundingPower;
+uniform float timeSeconds;
+uniform int rainEnabled;
+uniform float rainIntensity;
+uniform float rainSpeed;
+uniform float rainScale;
+uniform float rainDistortion;
 
 uniform sampler2D maskTex;
 uniform int useMask;
@@ -106,6 +112,100 @@ vec2 refractionDir(vec2 uv) {
     vec2 toCenterPx = (vec2(0.5) - uv) * fullSize;
     float len = length(toCenterPx);
     return len > 0.1 ? toCenterPx / len : vec2(0.0);
+}
+
+// ============================================================================
+// OPTIONAL RAIN OVERLAY — textureless procedural droplets
+// ============================================================================
+
+float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 345.45));
+    p += dot(p, p + 34.345);
+    return fract(p.x * p.y);
+}
+
+float rainDropCell(vec2 gv, vec2 id, float density, float speed) {
+    float rnd = hash21(id);
+    float activeMask = step(1.0 - density, rnd);
+
+    float sizeRnd = hash21(id + vec2(11.3, 19.7));
+    float dropSize = mix(0.65, 1.75, sizeRnd);
+    float width = mix(0.026, 0.060, sizeRnd);
+    float height = width * mix(1.35, 2.05, hash21(id + vec2(4.7, 2.9)));
+
+    float x = 0.14 + 0.72 * hash21(id + vec2(3.1, 7.7));
+    float y = fract(timeSeconds * speed * (0.16 + rnd * 0.55) + rnd);
+    float fadeOut = 1.0 - smoothstep(0.58, 1.0, y);
+    float lifeFade = fadeOut;
+    float sizeFade = mix(0.18, 1.0, fadeOut);
+    vec2 d = vec2(gv.x - x, gv.y - y);
+
+    float taper = smoothstep(-height, height, d.y);
+    float localWidth = width * dropSize * sizeFade * mix(0.58, 1.18, taper);
+    float localHeight = height * dropSize * sizeFade;
+    float bodyMetric = length(vec2(d.x / localWidth, d.y / localHeight));
+    float body = 1.0 - smoothstep(0.78, 1.02, bodyMetric);
+
+    vec2 beadD = vec2(d.x / (localWidth * 0.85), (d.y - localHeight * 0.28) / (localHeight * 0.55));
+    float bead = 1.0 - smoothstep(0.45, 0.98, length(beadD));
+
+    float trailLength = mix(0.10, 0.34, sizeRnd) * sizeFade;
+    float tailY = -d.y - localHeight * 0.18;
+    float trailWidth = localWidth * mix(0.08, 0.16, sizeRnd) * (1.0 - smoothstep(0.0, trailLength, tailY));
+    float trail = (1.0 - smoothstep(trailWidth, trailWidth * 2.4, abs(d.x)))
+                * smoothstep(0.0, localHeight * 0.28, tailY)
+                * (1.0 - smoothstep(trailLength * 0.45, trailLength, tailY));
+
+    float drop = max(body, bead * 0.85);
+    return activeMask * lifeFade * max(drop, trail * mix(0.06, 0.14, sizeRnd));
+}
+
+float rainLayer(vec2 uv, float density, float speed, float scale) {
+    vec2 p = uv * vec2(16.0, 10.0) * scale;
+    vec2 id = floor(p);
+    vec2 gv = fract(p);
+
+    // Sample neighboring vertical cells too, so droplets/trails crossing a
+    // cell boundary fade naturally instead of being clipped by fract().
+    float center = rainDropCell(gv, id, density, speed);
+    float above = rainDropCell(gv + vec2(0.0, 1.0), id - vec2(0.0, 1.0), density, speed);
+    float below = rainDropCell(gv - vec2(0.0, 1.0), id + vec2(0.0, 1.0), density, speed);
+    return max(center, max(above, below));
+}
+
+float rainField(vec2 uv) {
+    float density = clamp(rainIntensity, 0.0, 1.0);
+    float scale = max(rainScale, 0.1);
+    float speed = max(rainSpeed, 0.0);
+    float a = rainLayer(uv, density * 0.78, speed, scale);
+    float b = rainLayer(uv * 1.37 + vec2(0.17, 0.41), density * 0.42, speed * 1.35, scale * 1.28);
+    return clamp(max(a, b * 0.78), 0.0, 1.0);
+}
+
+float rainStreakField(vec2 uv) {
+    float density = clamp(rainIntensity, 0.0, 1.0);
+    float scale = max(rainScale, 0.1);
+    float speed = max(rainSpeed, 0.0);
+
+    vec2 slanted = vec2(uv.x + uv.y * 0.18, uv.y);
+    vec2 p = slanted * vec2(42.0, 18.0) * scale;
+    vec2 id = floor(p);
+    vec2 gv = fract(p);
+
+    float rnd = hash21(id);
+    float activeMask = step(1.0 - density * 0.55, rnd);
+    float y = fract(gv.y + timeSeconds * speed * (0.9 + rnd * 0.8));
+    float x = 0.5 + (hash21(id + vec2(9.1, 2.4)) - 0.5) * 0.32;
+
+    float line = (1.0 - smoothstep(0.010, 0.030, abs(gv.x - x)))
+               * smoothstep(0.02, 0.16, y)
+               * (1.0 - smoothstep(0.20, 0.72, y));
+
+    return activeMask * line * 0.55;
+}
+
+float rainWaterField(vec2 uv) {
+    return rainField(uv);
 }
 
 // ============================================================================
@@ -187,10 +287,30 @@ void main() {
     // Nearby color influence comes naturally from the Gaussian blur
     // kernel crossing the window boundary — no explicit raw sampling.
     // ========================================
+    float rain = 0.0;
+    float rainStreak = 0.0;
+    float rainEdge = 0.0;
+    float rainSpec = 0.0;
+    vec2 rainUVOffset = vec2(0.0);
+    if (rainEnabled == 1 && rainIntensity > 0.001) {
+        rain = rainWaterField(uv);
+        rainStreak = rainStreakField(uv);
+        float px = 1.0 / max(minDim, 1.0);
+        vec2 n = vec2(
+            rainWaterField(uv + vec2(px, 0.0)) - rainWaterField(uv - vec2(px, 0.0)),
+            rainWaterField(uv + vec2(0.0, px)) - rainWaterField(uv - vec2(0.0, px))
+        );
+        float nLen = length(n);
+        vec2 nDir = n / max(nLen, 0.0001);
+        rainEdge = smoothstep(0.015, 0.12, nLen);
+        rainSpec = pow(max(dot(nDir, normalize(vec2(-0.45, -0.9))), 0.0), 3.0) * rainEdge;
+        rainUVOffset = -n * max(rainDistortion, 0.0);
+    }
+
     vec3 color;
-    vec2 uvR = uv + offsetR + domeUV;
-    vec2 uvG = uv + offsetG + domeUV;
-    vec2 uvB = uv + offsetB + domeUV;
+    vec2 uvR = uv + offsetR + domeUV + rainUVOffset;
+    vec2 uvG = uv + offsetG + domeUV + rainUVOffset;
+    vec2 uvB = uv + offsetB + domeUV + rainUVOffset;
 
     if (chromaticAberration > 0.001 && edgeProximity > 0.01) {
         color.r = sampleBlurred(uvR).r;
@@ -231,6 +351,16 @@ void main() {
     // COLOR TINT OVERLAY
     // ========================================
     color = mix(color, tintColor, tintAlpha);
+
+    // ========================================
+    // RAIN HIGHLIGHT / REFRACTION CUES
+    // ========================================
+    if (rainEnabled == 1 && (rain > 0.001 || rainStreak > 0.001)) {
+        color *= 1.0 - rain * rainIntensity * 0.06;
+        color += vec3(0.62, 0.76, 1.0) * rainStreak * (0.035 + rainIntensity * 0.08);
+        color += vec3(0.75, 0.86, 1.0) * rainEdge * (0.06 + rainIntensity * 0.16);
+        color += vec3(1.0, 0.98, 0.92) * rainSpec * (0.16 + rainIntensity * 0.32);
+    }
 
     // ========================================
     // FRESNEL RIM GLOW (edge zone)

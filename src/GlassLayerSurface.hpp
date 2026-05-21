@@ -18,6 +18,7 @@ class CGlassLayerSurface {
     void compositeAndRestore(PHLMONITOR monitor, float alpha);
 
     void damageIfMoved();
+    void damageEntire();
 
     [[nodiscard]] PHLLS getLayerSurface() const;
 
